@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro — Multi-Agent AI Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <div>
+        <div class="brand-name">Maestro</div>
+        <div class="brand-sub">multi-agent assistant</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">The Team</div>
+      <div id="roster" class="roster"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Try asking</div>
+      <div id="examples" class="examples"></div>
+    </div>
+
+    <div class="status">
+      <span id="status-dot" class="dot"></span>
+      <span id="status-text">checking model…</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <h1>A supervisor that routes your request to the right specialist agent</h1>
+      <p>One orchestrator. Four specialists. Real tools. Running 100% locally.</p>
+    </header>
+
+    <div id="chat" class="chat">
+      <div class="empty">
+        <div class="empty-mark">◆</div>
+        <p>Ask anything. Maestro will pick an agent and show you its work.</p>
+      </div>
+    </div>
+
+    <form id="composer" class="composer">
+      <input id="input" type="text" autocomplete="off"
+             placeholder="e.g. What's the weather in Tokyo?" />
+      <button id="send" type="submit">Send</button>
+    </form>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
