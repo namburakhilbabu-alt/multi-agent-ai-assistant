@@ -1,25 +1,23 @@
-"""Shared LangChain agent runtime.
+"""Shared agent runtime using LangGraph's create_react_agent.
 
-Every specialist agent is built with LangChain's create_tool_calling_agent
-and run via AgentExecutor. The reason-and-act loop is handled by LangChain
-internally — tools are called automatically until the model gives a final answer.
+Each specialist agent is a compiled LangGraph ReAct graph:
+  START → agent node (LLM decides) → tools node (runs tools) → loops → END
 
-Progress is reported through an async emit callback so the API can stream a
-live view of what the agent is doing.
+The graph handles the reason-and-act loop automatically.
+We expose invoke() for the orchestrator to call the agent as a tool,
+and astream_events() to surface inner tool calls to the UI.
 """
 
 from __future__ import annotations
 
 from typing import Awaitable, Callable
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.language_models import BaseChatModel
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import BaseTool
+from langgraph.prebuilt import create_react_agent
 
 EmitFn = Callable[[dict], Awaitable[None]]
-
-MAX_ITERATIONS = 5
 
 
 class Agent:
@@ -33,54 +31,53 @@ class Agent:
     ):
         self.name = name
         self.description = description
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
-
-        lc_agent = create_tool_calling_agent(llm, tools, prompt)
-        self._executor = AgentExecutor(
-            agent=lc_agent,
+        # create_react_agent returns a compiled LangGraph StateGraph.
+        # prompt= sets the system message; the ReAct loop is wired internally.
+        self._graph = create_react_agent(
+            model=llm,
             tools=tools,
-            max_iterations=MAX_ITERATIONS,
-            handle_parsing_errors=True,
-            verbose=False,
+            prompt=system_prompt,
         )
 
+    def invoke(self, query: str) -> str:
+        """Synchronous run — used when an agent is called as a tool by the supervisor."""
+        result = self._graph.invoke({"messages": [HumanMessage(content=query)]})
+        return result["messages"][-1].content
+
     async def run(self, query: str, emit: EmitFn) -> str:
-        """Run the agent, stream tool events, return the final answer."""
+        """Async streaming run — streams tool events to the UI, returns final answer."""
         answer = ""
 
-        async for event in self._executor.astream_events(
-            {"input": query}, version="v2"
+        async for event in self._graph.astream_events(
+            {"messages": [HumanMessage(content=query)]},
+            version="v2",
         ):
             kind = event["event"]
-            name = event.get("name", "")
+            tool_name = event.get("name", "")
             data = event.get("data", {})
 
             if kind == "on_tool_start":
                 await emit({
                     "type": "tool_start",
                     "agent": self.name,
-                    "tool": name,
+                    "tool": tool_name,
                     "args": data.get("input", {}),
                 })
 
             elif kind == "on_tool_end":
-                output = data.get("output", "")
-                result = output.content if hasattr(output, "content") else str(output)
+                raw = data.get("output", "")
+                result = raw.content if hasattr(raw, "content") else str(raw)
                 await emit({
                     "type": "tool_end",
                     "agent": self.name,
-                    "tool": name,
+                    "tool": tool_name,
                     "result": result,
                 })
 
-            elif kind == "on_chain_end" and name == "AgentExecutor":
-                # Capture final answer from the AgentExecutor's output
-                out = data.get("output", {})
-                answer = out.get("output", "") if isinstance(out, dict) else str(out)
+            elif kind == "on_chain_end" and tool_name == "LangGraph":
+                messages = data.get("output", {}).get("messages", [])
+                if messages:
+                    last = messages[-1]
+                    answer = last.content if hasattr(last, "content") else str(last)
 
         return answer.strip()
