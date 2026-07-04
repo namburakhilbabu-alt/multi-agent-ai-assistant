@@ -3,8 +3,9 @@ uvicorn[standard]==0.34.0
 httpx==0.28.1
 pydantic==2.10.4
 
-# LangChain
+# LangChain / LangGraph
 langchain>=0.3.0
 langchain-core>=0.3.0
 langchain-groq>=0.2.0
 langchain-ollama>=0.2.0
+langgraph>=0.2.0
