@@ -1,7 +1,8 @@
-"""Specialist agent for writing tasks. Needs no tools — just the model."""
+"""Specialist agent for writing tasks — no tools, pure LLM."""
 
 from __future__ import annotations
 
+from ..llm import get_llm
 from .base import Agent
 
 SYSTEM_PROMPT = (
@@ -17,4 +18,5 @@ def build() -> Agent:
         description="Drafts, rewrites, summarizes and translates text.",
         system_prompt=SYSTEM_PROMPT,
         tools=[],
+        llm=get_llm(temperature=0.3),
     )

@@ -1,13 +1,12 @@
-"""A safe arithmetic evaluator exposed as a tool."""
+"""Safe arithmetic evaluator exposed as a LangChain tool."""
 
 from __future__ import annotations
 
 import ast
 import operator
 
-from .base import tool
+from langchain_core.tools import tool
 
-# Only these operators are allowed — no names, calls, or attribute access.
 _OPERATORS = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
@@ -33,23 +32,13 @@ def _eval(node: ast.AST) -> float:
     raise ValueError("unsupported expression")
 
 
-@tool(
-    description="Evaluate a basic arithmetic expression using +, -, *, /, ** and %. "
-    "Use this for any calculation.",
-    parameters={
-        "type": "object",
-        "properties": {
-            "expression": {
-                "type": "string",
-                "description": "The arithmetic expression to evaluate.",
-            }
-        },
-        "required": ["expression"],
-    },
-)
+@tool
 def calculator(expression: str) -> str:
-    result = _eval(ast.parse(expression, mode="eval").body)
-    # Present whole numbers cleanly (12.0 -> 12).
-    if isinstance(result, float) and result.is_integer():
-        result = int(result)
-    return f"{expression} = {result}"
+    """Evaluate a basic arithmetic expression using +, -, *, /, ** and %. Use this for any calculation."""
+    try:
+        result = _eval(ast.parse(expression, mode="eval").body)
+        if isinstance(result, float) and result.is_integer():
+            result = int(result)
+        return f"{expression} = {result}"
+    except Exception as exc:
+        return f"Calculator error: {exc}"

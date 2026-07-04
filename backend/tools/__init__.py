@@ -1,16 +1,8 @@
-"""Tool exports."""
+"""Tool exports — all tools are LangChain @tool functions."""
 
-from .base import Tool, tool
 from .calculator import calculator
 from .knowledge_base import search_knowledge_base
 from .units import convert_units
 from .weather import get_weather
 
-__all__ = [
-    "Tool",
-    "tool",
-    "calculator",
-    "convert_units",
-    "get_weather",
-    "search_knowledge_base",
-]
+__all__ = ["calculator", "convert_units", "get_weather", "search_knowledge_base"]

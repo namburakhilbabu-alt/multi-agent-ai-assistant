@@ -1,13 +1,10 @@
-"""The shared agent runtime.
+"""Shared LangChain agent runtime.
 
-Every specialist agent is an instance of :class:`Agent`. An agent owns a system
-prompt and a set of tools, and runs a reason-and-act loop against the model:
+Every specialist agent is built with LangChain's create_tool_calling_agent
+and run via AgentExecutor. The reason-and-act loop is handled by LangChain
+internally — tools are called automatically until the model gives a final answer.
 
-    1. Ask the model, advertising the agent's tools.
-    2. If the model asks to call tools, run them and feed the results back.
-    3. Repeat until the model answers in plain text (or a step budget runs out).
-
-Progress is reported through an async ``emit`` callback so the API can stream a
+Progress is reported through an async emit callback so the API can stream a
 live view of what the agent is doing.
 """
 
@@ -15,13 +12,14 @@ from __future__ import annotations
 
 from typing import Awaitable, Callable
 
-from ..llm import LLMClient
-from ..tools.base import Tool
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import BaseTool
 
-# An emit callback receives one event dict at a time.
 EmitFn = Callable[[dict], Awaitable[None]]
 
-MAX_STEPS = 5
+MAX_ITERATIONS = 5
 
 
 class Agent:
@@ -30,52 +28,59 @@ class Agent:
         name: str,
         description: str,
         system_prompt: str,
-        tools: list[Tool] | None = None,
-        llm: LLMClient | None = None,
+        tools: list[BaseTool],
+        llm: BaseChatModel,
     ):
         self.name = name
         self.description = description
-        self.system_prompt = system_prompt
-        self.tools = tools or []
-        self.llm = llm or LLMClient()
-        self._by_name = {t.name: t for t in self.tools}
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ])
+
+        lc_agent = create_tool_calling_agent(llm, tools, prompt)
+        self._executor = AgentExecutor(
+            agent=lc_agent,
+            tools=tools,
+            max_iterations=MAX_ITERATIONS,
+            handle_parsing_errors=True,
+            verbose=False,
+        )
 
     async def run(self, query: str, emit: EmitFn) -> str:
-        """Answer ``query``, emitting progress events, and return the final text."""
-        messages = [
-            {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": query},
-        ]
-        specs = [t.spec for t in self.tools] or None
+        """Run the agent, stream tool events, return the final answer."""
+        answer = ""
 
-        for _ in range(MAX_STEPS):
-            message = await self.llm.chat(messages, tools=specs)
-            tool_calls = message.get("tool_calls") or []
+        async for event in self._executor.astream_events(
+            {"input": query}, version="v2"
+        ):
+            kind = event["event"]
+            name = event.get("name", "")
+            data = event.get("data", {})
 
-            if not tool_calls:
-                return (message.get("content") or "").strip()
+            if kind == "on_tool_start":
+                await emit({
+                    "type": "tool_start",
+                    "agent": self.name,
+                    "tool": name,
+                    "args": data.get("input", {}),
+                })
 
-            # Record the model's request to call tools, then execute each one.
-            messages.append(message)
-            for call in tool_calls:
-                fn = call.get("function", {})
-                result = await self._run_tool(fn.get("name"), fn.get("arguments", {}), emit)
-                messages.append({"role": "tool", "content": result})
+            elif kind == "on_tool_end":
+                output = data.get("output", "")
+                result = output.content if hasattr(output, "content") else str(output)
+                await emit({
+                    "type": "tool_end",
+                    "agent": self.name,
+                    "tool": name,
+                    "result": result,
+                })
 
-        # Out of steps: ask the model for a final answer without tools.
-        messages.append({
-            "role": "user",
-            "content": "Answer now using the information gathered above.",
-        })
-        message = await self.llm.chat(messages)
-        return (message.get("content") or "").strip()
+            elif kind == "on_chain_end" and name == "AgentExecutor":
+                # Capture final answer from the AgentExecutor's output
+                out = data.get("output", {})
+                answer = out.get("output", "") if isinstance(out, dict) else str(out)
 
-    async def _run_tool(self, name: str | None, args: dict, emit: EmitFn) -> str:
-        tool = self._by_name.get(name)
-        if tool is None:
-            return f"Unknown tool '{name}'."
-
-        await emit({"type": "tool_start", "agent": self.name, "tool": name, "args": args})
-        result = tool.run(**args)
-        await emit({"type": "tool_end", "agent": self.name, "tool": name, "result": result})
-        return result
+        return answer.strip()
