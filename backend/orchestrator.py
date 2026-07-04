@@ -14,6 +14,7 @@ Architecture:
 
 from __future__ import annotations
 
+import re
 from typing import Awaitable, Callable
 
 from langchain_core.messages import HumanMessage
@@ -25,6 +26,27 @@ from .agents.base import Agent
 from .llm import get_llm
 
 EmitFn = Callable[[dict], Awaitable[None]]
+
+# Regex that matches leaked tool-call JSON blocks that small local models (Mistral)
+# sometimes output as plain text instead of structured calls.
+_TOOL_CALL_LEAK = re.compile(
+    r"```[^\n]*\n?\s*\[.*?\]\s*```|"   # fenced code block with JSON array
+    r"\[\s*\{\"name\"\s*:.*?\}\s*\]",  # bare JSON array like [{"name":"..."}]
+    re.DOTALL,
+)
+# Also remove common preamble sentences the model writes before the JSON.
+_PREAMBLE_LEAK = re.compile(
+    r"^(To [^.]+,?\s+I will use the `[^`]+` [^.]+\.\s*)",
+    re.IGNORECASE,
+)
+
+
+def _clean(text: str) -> str:
+    """Strip leaked tool-call JSON from a model response."""
+    text = _TOOL_CALL_LEAK.sub("", text)
+    text = _PREAMBLE_LEAK.sub("", text)
+    return text.strip()
+
 
 # Maps the tool function name → display agent name shown in the UI.
 _TOOL_TO_AGENT: dict[str, str] = {
@@ -138,5 +160,6 @@ class Orchestrator:
                     if candidate:
                         answer = candidate
 
+        answer = _clean(answer)
         await emit({"type": "final", "answer": answer})
         return answer
