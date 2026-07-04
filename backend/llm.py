@@ -8,8 +8,15 @@ Auto-selects backend:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import httpx
+
+# Load .env from the project root so GROQ_API_KEY etc. work without exporting.
+_env_file = Path(__file__).resolve().parent.parent / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_file)
 from langchain_core.language_models import BaseChatModel
 from langchain_groq import ChatGroq
 from langchain_ollama import ChatOllama
