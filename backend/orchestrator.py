@@ -124,6 +124,7 @@ class Orchestrator:
         await emit({"type": "orchestrator_start", "query": query})
 
         answer = ""
+        current_agent = ""
 
         async for event in self._supervisor.astream_events(
             {"messages": [HumanMessage(content=query)]},
@@ -133,9 +134,28 @@ class Orchestrator:
             tool_name = event.get("name", "")
             data = event.get("data", {})
 
-            if kind == "on_tool_start" and tool_name in _TOOL_TO_AGENT:
+            if kind == "on_tool_start" and tool_name not in _TOOL_TO_AGENT:
+                # A tool called inside a specialist agent (calculator, get_weather, ...).
+                await emit({
+                    "type": "tool_start",
+                    "agent": current_agent,
+                    "tool": tool_name,
+                    "args": data.get("input", {}),
+                })
+
+            elif kind == "on_tool_end" and tool_name not in _TOOL_TO_AGENT:
+                raw = data.get("output", "")
+                await emit({
+                    "type": "tool_end",
+                    "agent": current_agent,
+                    "tool": tool_name,
+                    "result": raw.content if hasattr(raw, "content") else str(raw),
+                })
+
+            elif kind == "on_tool_start" and tool_name in _TOOL_TO_AGENT:
                 # Supervisor just decided which agent to call.
                 agent_display = _TOOL_TO_AGENT[tool_name]
+                current_agent = agent_display
                 agent = self._agents[agent_display]
                 await emit({
                     "type": "route",
@@ -161,5 +181,5 @@ class Orchestrator:
                         answer = candidate
 
         answer = _clean(answer)
-        await emit({"type": "final", "answer": answer})
+        await emit({"type": "final", "agent": current_agent or "Maestro", "answer": answer})
         return answer

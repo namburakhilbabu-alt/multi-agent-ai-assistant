@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .llm import MODEL, check_health
+from .llm import active_model, check_health
 from .orchestrator import Orchestrator
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
@@ -31,7 +31,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": await check_health(), "model": MODEL}
+    return {"ok": await check_health(), "model": active_model()}
 
 
 @app.get("/api/agents")

@@ -1,12 +1,17 @@
-fastapi==0.115.6
-python-dotenv>=1.0.0
-uvicorn[standard]==0.34.0
-httpx==0.28.1
-pydantic==2.10.4
+# UI (Streamlit Community Cloud entry point: streamlit_app.py)
+streamlit>=1.40,<2
 
 # LangChain / LangGraph
-langchain>=0.3.0
-langchain-core>=0.3.0
-langchain-groq>=0.2.0
-langchain-ollama>=0.2.0
-langgraph>=0.2.0
+langchain-core>=0.3.30,<0.4
+langchain-groq>=0.2.4,<0.4
+langchain-ollama>=0.2.2,<0.4
+langgraph>=0.2.60,<0.7
+
+# HTTP + config
+httpx>=0.27,<1
+python-dotenv>=1.0
+
+# Optional FastAPI server + web UI (uvicorn backend.main:app) and Docker image
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.7,<3

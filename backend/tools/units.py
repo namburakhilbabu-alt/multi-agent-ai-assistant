@@ -45,6 +45,6 @@ def convert_units(value: float, from_unit: str, to_unit: str) -> str:
             result = _convert_temp(value, src, dst)
         else:
             return f"Cannot convert from '{from_unit}' to '{to_unit}' (incompatible units)."
-        return f"{value} {from_unit} = {round(result, 4)} {to_unit}"
+        return f"{value:g} {from_unit} = {round(result, 4)} {to_unit}"
     except Exception as exc:
         return f"Conversion error: {exc}"

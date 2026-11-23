@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start Maestro locally. Requires Ollama running with the Mistral model pulled.
+# Start the FastAPI server locally with Ollama. For the Streamlit app use: streamlit run streamlit_app.py
 set -euo pipefail
 
 cd "$(dirname "$0")"

@@ -3,13 +3,17 @@
     pip install pytest && pytest
 """
 
+from langchain_core.utils.function_calling import convert_to_openai_tool
+
 from backend.tools import calculator, convert_units, search_knowledge_base
-from backend.tools.calculator import _eval
-import ast
 
 
 def _calc(expr: str) -> str:
-    return calculator.run(expression=expr)
+    return calculator.invoke({"expression": expr})
+
+
+def _convert(value, from_unit: str, to_unit: str) -> str:
+    return convert_units.invoke({"value": value, "from_unit": from_unit, "to_unit": to_unit})
 
 
 def test_calculator_basic():
@@ -24,26 +28,24 @@ def test_calculator_is_safe():
 
 def test_convert_units_length_and_aliases():
     # Full unit names (as a model might emit) are normalised to symbols.
-    assert convert_units.run(value=5, from_unit="miles", to_unit="kilometers") == \
-        "5 miles = 8.0467 kilometers"
+    assert _convert(5, "miles", "kilometers") == "5 miles = 8.0467 kilometers"
 
 
 def test_convert_units_temperature():
-    assert convert_units.run(value=100, from_unit="c", to_unit="f") == "100 c = 212.0 f"
+    assert _convert(100, "c", "f") == "100 c = 212.0 f"
 
 
 def test_convert_units_incompatible():
-    result = convert_units.run(value=1, from_unit="kg", to_unit="m")
-    assert "cannot convert" in result.lower()
+    assert "cannot convert" in _convert(1, "kg", "m").lower()
 
 
 def test_knowledge_base_finds_agents():
-    result = search_knowledge_base.run(query="what agents does Maestro have")
+    result = search_knowledge_base.invoke({"query": "what agents does Maestro have"})
     assert "Math Agent" in result
 
 
 def test_tool_spec_shape():
-    spec = calculator.spec
+    spec = convert_to_openai_tool(calculator)
     assert spec["type"] == "function"
     assert spec["function"]["name"] == "calculator"
     assert "expression" in spec["function"]["parameters"]["properties"]
